@@ -1,18 +1,283 @@
-Dammika
-Pushpa Jenet
-Kumara
-Chamara
-Ayesha
-Sachini
-Rehana
-Imanjali
-Helani
-Rasika
-Harshani
-Sandamali
-Thilini
-K.A.D.D. Dammika
-R.G. Thilini
-Mihika
-G.K Chandrika
-Nishanthi
+import { useState, useEffect } from "react";
+import Nav from "./Nav";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { FaFilePdf, FaEdit, FaSearch } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+
+const Employees = () => {
+  const [employees, setEmployees] = useState([]);
+  const [companyDetails, setCompanyDetails] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [columnVisibility, setColumnVisibility] = useState({
+    nameWithInitials: false,
+    nickName: false,
+    rentAddress: false,
+    dateOfBirth: false,
+    otherContactNo: false,
+    religion: false,
+    email: false,
+    showCompany: false,
+    showJoinDate: false,
+  });
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchEmployees();
+    fetchCompanyDetails();
+  }, []);
+
+  async function fetchEmployees() {
+    try {
+      const response = await fetch("http://localhost:8080/api/staff/get");
+      if (!response.ok) {
+        throw new Error("HTTP Error! status: " + response.status);
+      }
+      const employees = await response.json();
+      setEmployees(employees);
+      console.log(employees)
+    } catch (error) {
+      console.error("fetch employees error: ", error);
+    }
+  }
+
+  async function fetchCompanyDetails() {
+    try {
+      const response = await fetch(
+        "http://localhost:8080/api/company-emp/getAll"
+      );
+      if (!response.ok) {
+        throw new Error("HTTP Error! status: " + response.status);
+      }
+      const companyDetails = await response.json();
+      setCompanyDetails(companyDetails);
+    } catch (error) {
+      console.error("fetch company details error: ", error);
+    }
+  }
+
+  const calculateAge = (dateOfBirth) => {
+    const birthDate = new Date(dateOfBirth);
+    const ageDifMs = Date.now() - birthDate.getTime();
+    const ageDate = new Date(ageDifMs);
+    return Math.abs(ageDate.getUTCFullYear() - 1970);
+  };
+
+  const toggleColumn = (column) => {
+    setColumnVisibility((prev) => ({
+      ...prev,
+      [column]: !prev[column],
+    }));
+  };
+
+  const generatePDF = async () => {
+    const input = document.getElementById("employeeTable");
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF("l", "mm", "a4");
+    const imgWidth = pdf.internal.pageSize.getWidth();
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+
+    pdf.save("employees.pdf");
+  };
+
+  const getLatestCompany = (empId) => {
+    const employeeCompanies = companyDetails.filter(
+      (company) => company.emp_id === empId
+    );
+
+    if (employeeCompanies.length === 0)
+      return { company: "N/A", joinDate: "N/A" };
+
+    const latestCompany = employeeCompanies.reduce((latest, current) =>
+      new Date(current.start_date) > new Date(latest.start_date)
+        ? current
+        : latest
+    );
+
+    return {
+      company: latestCompany.comp_name,
+      joinDate: latestCompany.start_date,
+    };
+  };
+
+  const visibleColumnsCount =
+    Object.values(columnVisibility).filter(Boolean).length + 5;
+
+  const handleEditClick = (id) => {
+    navigate(`/update-staff/${id}`);
+  };
+
+const filteredEmployees = searchQuery
+  ? employees.filter((employee) => {
+      const fullName = (employee.fullName || "").toLowerCase();
+      return fullName.includes(searchQuery.toLowerCase());
+    })
+  : employees;
+
+
+  return (
+    <div className="mx-auto max-w-screen-xl p-4">
+      <Nav />
+      <div className="mt-20">
+        <div className="mb-4 flex justify-between items-center">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="p-2 pl-10 border border-gray-300 rounded w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+          </div>
+          <button
+            onClick={generatePDF}
+            className="flex items-center bg-red-500 text-white font-bold py-2 px-4 rounded hover:bg-red-700 transition-colors duration-200 ml-4"
+            title="Generate PDF"
+          >
+            <FaFilePdf size={32} />
+          </button>
+        </div>
+        <div className="mb-4">
+          {Object.keys(columnVisibility).map((column) => (
+            <label key={column} className="mr-4">
+              <input
+                type="checkbox"
+                checked={columnVisibility[column]}
+                onChange={() => toggleColumn(column)}
+              />
+              {column.replace(/([A-Z])/g, " $1")}
+            </label>
+          ))}
+        </div>
+        <div className="overflow-x-auto">
+          <div className="shadow-md overflow-hidden border-b border-gray-200 sm:rounded-lg">
+            <table
+              id="employeeTable"
+              className="min-w-full w-full max-w-4xl bg-white table-auto"
+            >
+              <thead className="bg-green-200">
+                <tr className="text-left text-xs sm:text-sm uppercase tracking-wider text-gray-800">
+                  <th
+                    colSpan={visibleColumnsCount}
+                    className="py-3 px-4 text-center text-lg font-bold bg-teal-200"
+                  >
+                    All Employees
+                  </th>
+                </tr>
+                <tr className="text-left text-xs sm:text-sm uppercase tracking-wider text-gray-800 bg-green-100">
+                  <th className="py-3 px-4">Full Name</th>
+                  <th className="py-3 px-4">Primary Address</th>
+                  <th className="py-3 px-4">Age</th>
+                  <th className="py-3 px-4">Contact Number</th>
+                  {columnVisibility.showCompany && (
+                    <th className="py-3 px-4">Company</th>
+                  )}
+                  {columnVisibility.showJoinDate && (
+                    <th className="py-3 px-4">Join Date</th>
+                  )}
+                  {columnVisibility.nameWithInitials && (
+                    <th className="py-3 px-4">Name with Initials</th>
+                  )}
+                  {columnVisibility.email && (
+                    <th className="py-3 px-4">Email</th>
+                  )}
+                  {columnVisibility.nickName && (
+                    <th className="py-3 px-4">Nickname</th>
+                  )}
+                  {columnVisibility.rentAddress && (
+                    <th className="py-3 px-4">Rent Address</th>
+                  )}
+                  {columnVisibility.dateOfBirth && (
+                    <th className="py-3 px-4">Date of Birth</th>
+                  )}
+                  {columnVisibility.otherContactNo && (
+                    <th className="py-3 px-4">Other Contact Number</th>
+                  )}
+                  {columnVisibility.religion && (
+                    <th className="py-3 px-4">Religion</th>
+                  )}
+
+                  <th className="py-3 px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-700 divide-y divide-gray-200">
+                {filteredEmployees.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={visibleColumnsCount}
+                      className="py-4 px-4 text-center text-red-500 font-bold"
+                    >
+                      No employees found for the selected criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEmployees.map((employee) => {
+                    const { company, joinDate } = getLatestCompany(employee.id);
+                    return (
+                      <tr key={employee.id} className="text-sm">
+                        <td className="py-4 px-4">{employee.fullName}</td>
+                        <td className="py-4 px-4">{employee.primaryAddress}</td>
+                        <td className="py-4 px-4">
+                          {calculateAge(employee.dateOfBirth)}
+                        </td>
+                        <td className="py-4 px-4">{employee.contactNo}</td>
+                        {columnVisibility.showCompany && (
+                          <td className="py-4 px-4">{company}</td>
+                        )}
+                        {columnVisibility.showJoinDate && (
+                          <td className="py-4 px-4">{joinDate}</td>
+                        )}
+                        {columnVisibility.nameWithInitials && (
+                          <td className="py-4 px-4">
+                            {employee.nameWithInitials}
+                          </td>
+                        )}
+                        {columnVisibility.email && (
+                          <td className="py-4 px-4">{employee.email}</td>
+                        )}
+                        {columnVisibility.nickName && (
+                          <td className="py-4 px-4">{employee.nickName}</td>
+                        )}
+                        {columnVisibility.rentAddress && (
+                          <td className="py-4 px-4">{employee.rentAddress}</td>
+                        )}
+                        {columnVisibility.dateOfBirth && (
+                          <td className="py-4 px-4">{employee.dateOfBirth}</td>
+                        )}
+                        {columnVisibility.otherContactNo && (
+                          <td className="py-4 px-4">
+                            {employee.otherContactNo}
+                          </td>
+                        )}
+                        {columnVisibility.religion && (
+                          <td className="py-4 px-4">{employee.religion}</td>
+                        )}
+
+                        <td className="py-4 px-4 text-center">
+                          <button
+                            onClick={() => handleEditClick(employee.id)}
+                            className="text-blue-500 hover:text-blue-700"
+                            title="Edit"
+                          >
+                            <FaEdit />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Employees;
